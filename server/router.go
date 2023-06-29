@@ -21,6 +21,7 @@ func SetupRouter() *gin.Engine {
 	}))
 	r.GET("/", health)
 	r.POST("/api/katago-analysis/analysis", analysis)
+	r.POST("/api/katago-analysis/demo", demo)
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, "")
 	})

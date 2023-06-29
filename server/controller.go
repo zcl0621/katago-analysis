@@ -8,6 +8,7 @@ import (
 	"ktago-server-go/process"
 	"ktago-server-go/queue"
 	"ktago-server-go/utils"
+	"ktago-server-go/wq"
 	"net/http"
 	"sync"
 	"time"
@@ -112,4 +113,74 @@ func analysis(c *gin.Context) {
 	wg.Wait()
 	process.Lock.Unlock()
 	return
+}
+
+func demo(c *gin.Context) {
+	locked := process.Lock.TryLockWithTimeout(time.Second * 10)
+	if !locked {
+		c.JSON(http.StatusBadRequest, "wait")
+		return
+	}
+	var request demoRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		process.Lock.Unlock()
+		c.JSON(http.StatusBadRequest, "sgf error")
+		return
+	}
+	b, _, err := wq.Load(request.SGF)
+	if err != nil {
+		process.Lock.Unlock()
+		c.JSON(http.StatusBadRequest, "sgf error")
+		return
+	}
+	board := b.Board()
+	anyData := board.GetKataGoAnalysisData(1)
+	cmdline, err := json.Marshal(anyData)
+	if err != nil {
+		process.Lock.Unlock()
+		c.JSON(http.StatusBadRequest, "sgf error")
+		return
+	}
+	j := queue.Iterm{
+		C:      c,
+		Cmd:    fmt.Sprintf("%s", cmdline),
+		Result: "",
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func(c *gin.Context, wg *sync.WaitGroup, j *queue.Iterm) {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				c.JSON(http.StatusBadRequest, "timeout")
+				return
+			default:
+				if j.Result != "" {
+					var katagoResult katagoAnalysisResult
+					e := json.Unmarshal([]byte(j.Result), &katagoResult)
+					if e != nil {
+						c.JSON(http.StatusBadRequest, "failed")
+						return
+					}
+					resultMap := make(map[string]interface{})
+					resultMap["id"] = katagoResult.Id
+					resultMap["ownership"] = katagoResult.Ownership
+					resultMap["rootInfo"] = katagoResult.RootInfo
+					if err != nil {
+						c.JSON(http.StatusBadRequest, "failed")
+						return
+					}
+					c.JSON(http.StatusOK, resultMap)
+					return
+				}
+			}
+		}
+	}(c, &wg, &j)
+	logger.Logger("analysis", logger.INFO, nil, "set cmdline")
+	process.JobQueue.Push(&j)
+	wg.Wait()
+	process.Lock.Unlock()
 }
