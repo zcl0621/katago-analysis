@@ -1,0 +1,8 @@
+### Send POST request with json body
+POST http://10.18.28.10:37666/api/katago-analysis/analysis
+Content-Type: application/json
+
+{
+  "id": "999",
+  "data": "eJxEzLEKwjAUheF3OfNFWqFKMorS0cFBJWTQ5kIvtokkRkHx3SUidTv/N5wXxEGjrioQxnDnBG0MViC0DSwZ7MtU31l0oyZdLyZt6zmsJcQ8lAd0vXhODMIljAK9nDWEczhFd9jJk6Fr9evjv8V3Q3a8fXiOqZcr9C1mfn8CAAD//4+LLps="
+}
